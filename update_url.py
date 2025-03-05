@@ -13,7 +13,7 @@ username = 'root'
 password = 'Bruce1227Nancy'
 
 # 要修改的文件路径
-remote_file_path = '/home/web/caddy/Caddyfile'
+remote_file_path = '/www/server/panel/vhost/nginx/redirect/fn.200333.xyz/ee7af3c0125a23a348f39b2c8a6d7339_fn.200333.xyz.conf'
 
 # 本地存储上一次值的文件路径
 local_value_file = '/mnt/mmcblk0p3/last_value.txt'
@@ -48,15 +48,25 @@ try:
         stdout.close()
         stdin.close()
 
-        # 替换内容
-        new_content = current_content.replace(old_text, new_text)
+        print(f"当前文件内容中的值: {old_text}")
+        print("原始内容片段：")
+        print(current_content[:500])
 
-        # 对比修改前后的内容
+        # 修改替换逻辑，使用更精确的匹配模式
+        old_pattern = f"-nas.200333.xyz:{old_text}"
+        new_pattern = f"-nas.200333.xyz:{new_text}"
+        new_content = current_content.replace(old_pattern, new_pattern)
+
+        # 检查是否有修改
         if current_content == new_content:
-            print("文件内容未发生变化，跳过修改和重启。")
+            print(f"警告：未能找到匹配的端口号 {old_text}")
         else:
-            # 将新内容写入远程文件
-            stdin, stdout, stderr = ssh.exec_command(f"echo '{new_content}' > {remote_file_path}")
+            print("检测到以下修改：")
+            print(f"将替换所有 {old_pattern} 为 {new_pattern}")
+            
+            # 使用临时文件来确保写入正确
+            temp_file = "/tmp/caddy_temp"
+            stdin, stdout, stderr = ssh.exec_command(f'echo \'{new_content}\' > {temp_file} && cat {temp_file} > {remote_file_path} && rm {temp_file}')
             error_output = stderr.read().decode()
             if error_output:
                 print(f"错误: {error_output}")
@@ -68,16 +78,16 @@ try:
                 f.write(new_text)
             print(f"已将新值 '{new_text}' 写入本地文件。")
 
-            # 重启 Caddy 服务
-            restart_command = "docker restart caddy"
-            stdin, stdout, stderr = ssh.exec_command(restart_command)
+            # 重新加载 Nginx 配置
+            reload_command = "/etc/init.d/nginx reload"
+            stdin, stdout, stderr = ssh.exec_command(reload_command)
 
-            # 检查重启命令执行结果
-            restart_error = stderr.read().decode()
-            if restart_error:
-                print(f"重启 Caddy 服务时出错: {restart_error}")
+            # 检查重载命令执行结果
+            reload_error = stderr.read().decode()
+            if reload_error:
+                print(f"重载 Nginx 配置时出错: {reload_error}")
             else:
-                print("Caddy 服务重启成功！")
+                print("Nginx 配置重载成功！")
 
             # 显式关闭 stdin, stdout, stderr
             stdin.close()
